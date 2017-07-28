@@ -1,0 +1,108 @@
+---
+title: "Exercise Classification on Activity Tracker Data"
+author: "Paul Nice"
+date: "28 July 2017"
+output: html_document
+---
+
+```{r setup, echo=FALSE, cache.lazy=TRUE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(caret)
+
+training.raw <- read_csv("./pml-training.csv")
+validation <- read_csv("./pml-testing.csv")
+
+set.seed(12345)
+trainSet <- createDataPartition(training.raw$classe, p=0.7, list=FALSE)
+
+training <- training.raw[trainSet,]
+testing <- training.raw[-trainSet,]
+
+#set target as factor
+training$classe <- as.factor(training$classe)
+testing$classe <- as.factor(testing$classe)
+
+na.features <- data.frame(colnum=1:160, colname=colnames(training) , 
+                          na.count=colSums(is.na(training)),
+                          na.pct=colSums(is.na(training))/length(training$X1))
+
+large.na <- na.features$na.pct>0.5
+sum(large.na)
+large.na.names <- colnames(training)[large.na]
+
+training <- select(training,everything(),-one_of(large.na.names))
+testing <- select(testing,everything(),-one_of(large.na.names))
+validation <- select(validation,everything(),-one_of(large.na.names))
+
+#remove time and factor variables
+training <- training[,6:60]
+testing <- testing[,6:60]
+validation <- validation[,6:60]
+
+#impute missing values
+tr.obj<- preProcess(training, method="knnImpute")
+upd.train <- predict(tr.obj, newdata=training)
+upd.test <- predict(tr.obj, newdata=testing)
+upd.val <- predict(tr.obj, newdata=validation)
+
+#train model
+
+library(parallel)
+library(doParallel)
+cluster <- makeCluster(detectCores() - 1) # convention to leave 1 core for OS
+registerDoParallel(cluster)
+
+fitControl <- trainControl(method = "cv",
+                           number = 10,
+                           allowParallel = TRUE)
+
+fit <- train(classe ~ ., method="rf",trControl = fitControl, data=upd.train)
+
+stopCluster(cluster)
+registerDoSEQ()
+
+test.outcome <- predict(fit, newdata=upd.test)
+
+
+```
+
+
+
+## Summary
+Random Forest Classification Model was selected to perform classification fo Exercise. Out of sample error rate was evidenced to be 0.004% - classifying of 585 smaples correctly
+
+## Initial Review of Data
+On initial review of the data there were significant numbers of the predictors that contained multiple missing values. Indeed there were 100 variables that were more than 50% missing (in most cases 95%+). Given the volume of missing observations imputation of new values for these predictors would have added little value to the anslysis hence these predictors were discounted
+```{r}
+hist(na.features$na.count, title="Missing observations per predictor",
+     xlab="Missing observations")
+
+```
+Removing these predictors left a small number of missing values these were imputed using the knnImpute method as part of the preprocessing of the data
+
+## Exploratory Plotting
+
+
+```{r plot, include=FALSE}
+
+```
+
+## Model Selection
+FOr the classificaton exercise I've chosen to use a Random Forest Model. The initial intention was use some sort of ensemble model as they have performed particularly well in competition however on inspection of the output of the Random Forest Output it was clear that the model was highly accurate and as such the need for an ensemble model was discounted. By segmenting the training data into a training and test set The estimate of the out of sample error for the model was 0.004%
+
+```{r impute, eval=FALSE}
+tr.obj<- preProcess(training, method="knnImpute")
+upd.train <- predict(tr.obj, newdata=training)
+upd.test <- predict(tr.obj, newdata=testing)
+upd.val <- predict(tr.obj, newdata=validation)
+```
+```{r}
+confusionMatrix(test.outcome, testing$classe)
+```
+
+## Model detail
+The Random Forest Model was trained using 10 fold cross validation to improve accuracy during the selection of predictors
+```{r}
+fit
+plot(fit)
+```
