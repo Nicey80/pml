@@ -69,7 +69,7 @@ test.outcome <- predict(fit, newdata=upd.test)
 
 
 ## Summary
-Random Forest Classification Model was selected to perform classification fo Exercise. Out of sample error rate was evidenced to be 0.35% - classifying 5835 of 5855 smaples correctly
+Random Forest Classification Model was selected to perform classification fo Exercise. Out of sample error rate was evidenced to be 0.35% - classifying 5835 of 5855 samples correctly. Thre models were initially tested (Rf, gbm & lda). LDA was discounted as the initial model performance was significantly worse than the other 2. Random Forest performed slightly better than gbm. Tests of an ensemble model failed to improve the accuracy and therefore the random forect model was selected
 
 ## Initial Review of Data
 On initial review of the data there were significant numbers of the predictors that contained multiple missing values. Indeed there were 100 variables that were more than 50% missing (in most cases 95%+). Given the volume of missing observations imputation of new values for these predictors would have added little value to the anslysis hence these predictors were discounted
@@ -82,14 +82,14 @@ hist(na.features$na.count, title="Missing observations per predictor",
 Removing these predictors left a small number of missing values these were imputed using the knnImpute method as part of the preprocessing of the data
 
 ## Exploratory Plotting
-```{r plot}
-featurePlot(training[,16:20], training$classe, plot="box", 
+```{r plot, echo=FALSE}
+caret::featurePlot(training[,16:20], training$classe, plot="box", 
             scales = list(y = list(relation="free"),
                           x = list(rot = 90)),  
             layout = c(5,1 ), 
             auto.key = list(columns = 2)
             )
-featurePlot(training[,11:15], training$classe, plot="box", 
+caret::featurePlot(training[,11:15], training$classe, plot="box", 
             scales = list(y = list(relation="free"),
                           x = list(rot = 90)),  
             layout = c(5,1 ), 
@@ -107,7 +107,7 @@ upd.test <- predict(tr.obj, newdata=testing)
 upd.val <- predict(tr.obj, newdata=validation)
 ```
 ```{r}
-confusionMatrix(test.outcome, testing$classe)
+caret::confusionMatrix(test.outcome, testing$classe)
 ```
 
 ## Model detail
@@ -116,3 +116,33 @@ The Random Forest Model was trained using 10 fold cross validation to improve ac
 fit
 plot(fit)
 ```
+
+## Appendix
+### GBM Model Performance
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+library(parallel)
+library(doParallel)
+library(caret)
+cluster <- makeCluster(detectCores() - 1) # convention to leave 1 core for OS
+registerDoParallel(cluster)
+
+fitControl <- trainControl(method = "cv",
+                           number = 10,
+                           allowParallel = TRUE)
+
+
+#t.outcome <- train.sb[,133]
+#t.pred <- train.sb[,-133]
+
+fit3 <- train(classe ~ ., method="gbm",trControl = fitControl, data=upd.train)
+
+stopCluster(cluster)
+registerDoSEQ()
+
+
+test.outcome3 <- predict(fit3, newdata=upd.test)
+
+caret::confusionMatrix(test.outcome3, testing$classe)
+
+```
+
